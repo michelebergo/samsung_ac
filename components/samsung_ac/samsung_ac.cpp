@@ -48,7 +48,8 @@ climate::ClimateTraits SamsungAcComponent::traits() {
       climate::CLIMATE_SWING_BOTH,
   });
 
-  traits.set_supports_current_temperature(true);
+  // current temperature support is implicit in ESPHome >= 2026.5
+  // (set_supports_current_temperature was removed)
 
   // 👇 Add this line to force 1°C step
   traits.set_visual_temperature_step(1.0f);
