@@ -1,5 +1,6 @@
 #include "esphome/components/samsung_ac/samsung_ac.h"
 #include "esphome/core/log.h"
+#include "esphome/core/application.h"
 
 namespace esphome {
 namespace samsung_ac {
@@ -75,6 +76,16 @@ void SamsungAcComponent::loop() {
     } else {
       this->data_index_++;
     }
+  }
+
+  // Esecuzione differita del comando A0 fuori dal contesto callback,
+  // in main loop. Aspetta: (a) flag attivo, (b) tempo minimo trascorso,
+  // (c) bus idle da almeno 200ms. Cosi' il Soft WDT non puo' scattare.
+  if (this->pending_send_a0_ &&
+      (int32_t)(millis() - this->pending_send_at_ms_) >= 0 &&
+      (millis() - this->last_rx_time_) > 200) {
+    this->pending_send_a0_ = false;
+    this->send_cmd_a0_();
   }
 }
 
@@ -160,7 +171,7 @@ void SamsungAcComponent::parse_data(const std::vector<uint8_t> &data) {
   for (size_t i = 0; i < data.size(); i++) {
     ESP_LOGV(TAG, "[%02d] = 0x%02X", i, data[i]);
   } */
-  
+
   std::string packet_log = "Raw packet: ";
   for (size_t i = 0; i < data.size(); i++) {
   char byte_str[6];
@@ -172,19 +183,22 @@ void SamsungAcComponent::parse_data(const std::vector<uint8_t> &data) {
 
    if (this->is_dirty) {
             if (this->data_[SAMSUNG_MSG_COMMAND_POS] == 0xD1) {
-                // The master(wired wall controller) is sending periodically commands to the slave and a broadcast message. 
-                // without receiving any answer from the slave and that’s the time window where to send our control 
-                // command(broadcast command sent to destination address 0xAD). So we need a routine checking if 
+                // The master(wired wall controller) is sending periodically commands to the slave and a broadcast message.
+                // without receiving any answer from the slave and that’s the time window where to send our control
+                // command(broadcast command sent to destination address 0xAD). So we need a routine checking if
                 // the master is sending a broadcast message and when the message is ended we can send our control command emulating the master.
-                this->cancel_timeout("send_cmd_a0");
-                this->set_timeout("send_cmd_a0", 50, [this]() { this->send_cmd_a0_(); });
-                //this->send_cmd_a0_();
+                // Non chiamiamo send_cmd_a0_() qui: parse_data e' invocato
+                // mentre stiamo gia' processando byte UART. La TX di 14B a
+                // 2400 8E1 (~64ms) bloccata in questo contesto innesca
+                // Soft WDT - Level1Int (PC ROM UART). Defer al loop().
+                this->pending_send_a0_ = true;
+                this->pending_send_at_ms_ = millis() + 50;
                 this->is_dirty = false;
-                ESP_LOGW(TAG, "sending command A0");
+                ESP_LOGW(TAG, "sending command A0 (deferred to loop)");
             }
 
             // we cannot update variables that are ready to be submitted to the slave
-            // so we wait until we receive a 0xAD message from the master and we've 
+            // so we wait until we receive a 0xAD message from the master and we've
             // taken our timewindow to send our variables to the slave device
             return;
     }
@@ -208,11 +222,11 @@ void SamsungAcComponent::parse_data(const std::vector<uint8_t> &data) {
     if (this->data_[SAMSUNG_MSG_DESTINATION_POS] == SAMSUNG_DESTINATION_ADDRESS) {
         return;
     }
-  
+
     switch (this->data_[SAMSUNG_MSG_COMMAND_POS]) {
-    
+
         case 0x52: {
-            
+
             const uint8_t *d = &data[SAMSUNG_MSG_DATA1_POS];  // points to data[4]
 
             // Interpret temperatures
@@ -262,14 +276,14 @@ void SamsungAcComponent::parse_data(const std::vector<uint8_t> &data) {
             ESP_LOGD(TAG, "  Room temp: %.1f °C", this->current_temperature);
             ESP_LOGD(TAG, "  Output air temp: %.1f °C", output_air_temperature);
             ESP_LOGD(TAG, "  Power: %s", power_on ? "ON" : "OFF");
-            ESP_LOGD(TAG, "  Fan mode: %s", 
+            ESP_LOGD(TAG, "  Fan mode: %s",
                 this->fan_mode == climate::CLIMATE_FAN_AUTO   ? "AUTO" :
                 this->fan_mode == climate::CLIMATE_FAN_LOW    ? "LOW" :
                 this->fan_mode == climate::CLIMATE_FAN_MEDIUM ? "MEDIUM" :
                 this->fan_mode == climate::CLIMATE_FAN_HIGH   ? "HIGH" :
                 "UNKNOWN");
 
-            ESP_LOGD(TAG, "  Swing mode: %s", 
+            ESP_LOGD(TAG, "  Swing mode: %s",
                 this->swing_mode == climate::CLIMATE_SWING_OFF      ? "OFF" :
                 this->swing_mode == climate::CLIMATE_SWING_VERTICAL ? "VERTICAL" :
                 "UNKNOWN");
@@ -292,8 +306,8 @@ void SamsungAcComponent::parse_data(const std::vector<uint8_t> &data) {
 
         } break;
 
-        case 0x54: 
-            
+        case 0x54:
+
         break;
 
         case 0x64:
@@ -352,21 +366,23 @@ void SamsungAcComponent::send_cmd_a0_(void) {
       break;
   }
 
-  switch (this->fan_mode.value()) {
-    case climate::CLIMATE_FAN_AUTO:
-      cmd[2] |= (0 << 5);
-      break;
-    case climate::CLIMATE_FAN_LOW:
-      cmd[2] |= (2 << 5);
-      break;
-    case climate::CLIMATE_FAN_MEDIUM:
-      cmd[2] |= (4 << 5);
-      break;
-    case climate::CLIMATE_FAN_HIGH:
-      cmd[2] |= (5 << 5);
-      break;
-    default:
-      break;
+  if (this->fan_mode.has_value()) {
+    switch (this->fan_mode.value()) {
+      case climate::CLIMATE_FAN_AUTO:
+        cmd[2] |= (0 << 5);
+        break;
+      case climate::CLIMATE_FAN_LOW:
+        cmd[2] |= (2 << 5);
+        break;
+      case climate::CLIMATE_FAN_MEDIUM:
+        cmd[2] |= (4 << 5);
+        break;
+      case climate::CLIMATE_FAN_HIGH:
+        cmd[2] |= (5 << 5);
+        break;
+      default:
+        break;
+    }
   }
 
   //cmd[2] |= (((uint8_t) round(this->target_temperature)) & 0xf) - 9;
@@ -388,31 +404,36 @@ void SamsungAcComponent::send_cmd_a0_(void) {
     this->reset_clean_filter_msg->publish_state(false);
   }
 
-  if (this->preset.value() == climate::CLIMATE_PRESET_SLEEP) {
+  if (this->preset.has_value() && this->preset.value() == climate::CLIMATE_PRESET_SLEEP) {
     cmd[0] |= (1 << 5);
   }
-  
+
   this->write_command_(0xa0, cmd, sizeof(cmd));
 }
 
 void SamsungAcComponent::write_command_(const uint8_t cmd, const uint8_t *cmd_data, uint8_t cmd_data_length) {
   uint8_t msg[SAMSUNG_MSG_LENGTH] = {0};
   msg[SAMSUNG_MSG_START_POS] = SAMSUNG_MSG_START;
-  msg[SAMSUNG_MSG_SOURCE_POS] = SAMSUNG_SOURCE_ADDRESS;
+  msg[SAMSUNG_MSG_SOURCE_POS] = SAMSUNG_SOURCE_ADDRESS+1;
   msg[SAMSUNG_MSG_DESTINATION_POS] = SAMSUNG_DESTINATION_ADDRESS;
   msg[SAMSUNG_MSG_COMMAND_POS] = cmd;
   memcpy(msg + SAMSUNG_MSG_DATA1_POS, cmd_data, std::min(cmd_data_length, SAMSUNG_DATA_LENGTH));
   msg[SAMSUNG_MSG_CHECKSUM_POS] = samsung_ac_checksum_(msg + 1, SAMSUNG_CHECKSUM_LENGTH);
   msg[SAMSUNG_MSG_END_POS] = SAMSUNG_MSG_END;
-  this->write_array(msg, sizeof(msg));
-   // Log full hex packet in one line
-  char log_line[128];
-  char *ptr = log_line;
-  for (int i = 0; i < SAMSUNG_MSG_LENGTH; i++) {
-    ptr += sprintf(ptr, "%02X ", msg[i]);
+
+  // TX byte-per-byte con yield() tra un byte e il successivo: alimenta
+  // Soft WDT, fa girare WiFi/lwIP, evita lo spin-loop bloccante in ROM
+  // UART (PC 0x40003B53) che si verificava chiamando write_array(14B).
+  // Invocato solo dal loop() principale, mai da contesto callback/ISR.
+  App.feed_wdt();
+  for (uint8_t i = 0; i < sizeof(msg); i++) {
+    yield();
+    this->write_byte(msg[i]);
+    yield();
   }
-  *ptr = '\0';  // Null-terminate
-  ESP_LOGD(TAG, "Sending packet: %s", log_line);
+  App.feed_wdt();
+
+  ESP_LOGD(TAG, "Sent A0 packet (cmd=0x%02X len=%u)", cmd, (unsigned) sizeof(msg));
 }
 
 uint8_t SamsungAcComponent::samsung_ac_checksum_(const uint8_t *command_data, uint8_t length) const {

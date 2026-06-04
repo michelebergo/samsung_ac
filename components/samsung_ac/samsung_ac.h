@@ -79,6 +79,10 @@ class SamsungAcComponent : public climate::Climate, public Component, public uar
   bool set_blade_position_{false};
   bool set_quiet_mode_{false};
   uint32_t last_rx_time_{0};
+
+  // Deferred A0 send (Soft WDT safe): set in parse_data, executed in loop()
+  bool pending_send_a0_{false};
+  uint32_t pending_send_at_ms_{0};
 };
 
 }  // namespace samsung_ac
