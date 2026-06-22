@@ -54,4 +54,4 @@ text_sensor:
 
 ## Next step
 Once you see valid packets, note the addresses (e.g. `20.00.00`, `10.00.00`)
-and switch to `samsung_ehs_nasa_example.yaml` with the full NASA component.
+and switch to `samsung_ehs_nasa.yaml` with the full NASA component.

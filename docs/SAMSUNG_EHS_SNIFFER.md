@@ -20,7 +20,7 @@ Read the **inlet water temperature** (and possibly outlet / flow / compressor / 
   - Broadcast: `0xAD`
 
 ## Sniffer strategy
-1. Flash `samsung_ac_sniffer_example.yaml` to an ESP32 connected to the F1/F2 bus.
+1. Flash `samsung_ac_sniffer.yaml` to an ESP32 connected to the F1/F2 bus.
 2. Let it log every valid frame for several minutes while the heat pump runs.
 3. Correlate frame bytes with the inlet water temperature shown on the official controller / app.
 4. Identify the command byte and data offset for the inlet temperature.
@@ -55,4 +55,4 @@ Once the inlet temperature command/offset is identified, extend the sniffer or c
 ## References
 - Existing component: `components/samsung_ac/`
 - Sniffer component: `components/samsung_ac_sniffer/`
-- Example config: `samsung_ac_sniffer_example.yaml`
+- Example config: `samsung_ac_sniffer.yaml`
