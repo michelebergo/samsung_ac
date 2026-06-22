@@ -1,0 +1,125 @@
+# ESPHome configuration for Samsung EHS heat pump (NASA protocol) on F1/F2.
+# Connect an ESP32 to the F1/F2 bus between the outdoor inverter and the
+# hydronic module. Use an RS-485 transceiver or optocoupler; for passive
+# monitoring leave TX disconnected or use a read-only tap.
+#
+# This uses the community component omerfaruk-aran/esphome_samsung_hvac_bus
+# which supports both NASA and Non-NASA Samsung HVAC buses.
+
+esphome:
+  name: samsung-ehs-nasa
+  friendly_name: Samsung EHS NASA
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+  logs:
+    component: ERROR
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# RS-485 / F1-F2 interface.
+# NASA heat pumps usually run at 9600 baud 8E1.
+uart:
+  id: samsung_bus
+  tx_pin: GPIO17   # leave unconnected for passive sniffing
+  rx_pin: GPIO16
+  baud_rate: 9600
+  data_bits: 8
+  parity: EVEN
+  stop_bits: 1
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/omerfaruk-aran/esphome_samsung_hvac_bus
+      ref: main
+    components: [samsung_ac]
+
+samsung_ac:
+  uart_id: samsung_bus
+  debug_log_messages: true
+  debug_log_undefined_messages: false
+  debug_log_messages_on_change: true
+
+  # First flash with only the two device entries below, then watch the logs
+  # for "Discovered devices:" and adjust addresses if needed.
+  devices:
+    # Indoor / hydronic unit (HTU). NASA address class 0x20 = Indoor.
+    - address: "20.00.00"
+      # Optional climate for the water heater / heating circuit.
+      # climate:
+      #   name: "EHS Heating"
+
+      # Built-in DHW tank temperature (message 0x4237).
+      water_temperature:
+        name: "EHS DHW Tank Temperature"
+
+      # Custom sensors for hydronic module water temperatures.
+      # 0x4236 = water inlet (return from heating circuit)
+      # 0x4238 = water outlet (flow to heating circuit)
+      # 0x4239 = alternative outlet reading on some units
+      custom_sensor:
+        - message: 0x4236
+          name: "EHS Water Inlet Temperature"
+          unit_of_measurement: "°C"
+          accuracy_decimals: 1
+          device_class: temperature
+          state_class: measurement
+          raw_filters:
+            - lambda: "return (int16_t)x;"
+            - multiply: 0.1
+
+        - message: 0x4238
+          name: "EHS Water Outlet Temperature"
+          unit_of_measurement: "°C"
+          accuracy_decimals: 1
+          device_class: temperature
+          state_class: measurement
+          raw_filters:
+            - lambda: "return (int16_t)x;"
+            - multiply: 0.1
+
+        - message: 0x4239
+          name: "EHS Water Outlet Alt Temperature"
+          unit_of_measurement: "°C"
+          accuracy_decimals: 1
+          device_class: temperature
+          state_class: measurement
+          raw_filters:
+            - lambda: "return (int16_t)x;"
+            - multiply: 0.1
+
+    # Outdoor unit. NASA address class 0x10 = Outdoor.
+    - address: "10.00.00"
+      outdoor_temperature:
+        name: "EHS Outdoor Temperature"
+      outdoor_instantaneous_power:
+        name: "EHS Outdoor Power"
+      outdoor_cumulative_energy:
+        name: "EHS Outdoor Energy"
+
+# Optional: expose the ESP32 free heap for diagnostics.
+sensor:
+  - platform: wifi_signal
+    name: "EHS NASA WiFi Signal"
+    update_interval: 60s
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "EHS NASA IP Address"

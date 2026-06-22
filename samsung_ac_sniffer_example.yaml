@@ -1,0 +1,61 @@
+# Example ESPHome configuration for sniffing the Samsung F1/F2 bus.
+# Connect an ESP32/ESP8266 to the bus via a level-shifter/transceiver
+# that can read 5V logic at 2400 8E1.
+
+esphome:
+  name: samsung-sniffer
+  friendly_name: Samsung Sniffer
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+uart:
+  - id: samsung_bus
+    tx_pin: GPIO17  # not used by sniffer, but UART device requires it
+    rx_pin: GPIO16
+    baud_rate: 2400
+    data_bits: 8
+    parity: EVEN
+    stop_bits: 1
+
+sensor:
+  - platform: samsung_ac_sniffer
+    uart_id: samsung_bus
+    total_packets:
+      name: "Samsung Total Packets"
+    valid_packets:
+      name: "Samsung Valid Packets"
+    invalid_packets:
+      name: "Samsung Invalid Packets"
+
+text_sensor:
+  - platform: samsung_ac_sniffer
+    uart_id: samsung_bus
+    last_packet:
+      name: "Samsung Last Packet"
+
+# Note: the sniffer component is passive. It only listens and logs.
+# To avoid disturbing the bus, leave tx_pin unconnected or use a
+# read-only transceiver (e.g. optocoupler on F1/F2).
