@@ -1,16 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import uart, text_sensor, sensor
-from esphome.const import (
-    CONF_ID,
-    CONF_UART_ID,
-    CONF_NAME,
-    CONF_UNIT_OF_MEASUREMENT,
-    CONF_ACCURACY_DECIMALS,
-    CONF_DEVICE_CLASS,
-    CONF_STATE_CLASS,
-    CONF_UPDATE_INTERVAL,
-)
+from esphome.const import CONF_ID, CONF_UART_ID
 
 samsung_nasa_sniffer_ns = cg.esphome_ns.namespace("samsung_nasa_sniffer")
 SamsungNasaSniffer = samsung_nasa_sniffer_ns.class_(
@@ -22,25 +13,14 @@ CONF_TOTAL_PACKETS = "total_packets"
 CONF_VALID_PACKETS = "valid_packets"
 CONF_INVALID_PACKETS = "invalid_packets"
 
-SENSOR_SCHEMA = sensor.SENSOR_SCHEMA.extend(
-    {
-        cv.Optional(CONF_UNIT_OF_MEASUREMENT): cv.string,
-        cv.Optional(CONF_ACCURACY_DECIMALS): cv.int_,
-        cv.Optional(CONF_DEVICE_CLASS): cv.string,
-        cv.Optional(CONF_STATE_CLASS): cv.string,
-    }
-)
-
-TEXT_SENSOR_SCHEMA = text_sensor.TEXT_SENSOR_SCHEMA.extend({})
-
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(SamsungNasaSniffer),
         cv.Required(CONF_UART_ID): cv.use_id(uart.UARTComponent),
-        cv.Optional(CONF_TOTAL_PACKETS): SENSOR_SCHEMA,
-        cv.Optional(CONF_VALID_PACKETS): SENSOR_SCHEMA,
-        cv.Optional(CONF_INVALID_PACKETS): SENSOR_SCHEMA,
-        cv.Optional(CONF_LAST_PACKET): TEXT_SENSOR_SCHEMA,
+        cv.Optional(CONF_TOTAL_PACKETS): sensor.sensor_schema(),
+        cv.Optional(CONF_VALID_PACKETS): sensor.sensor_schema(),
+        cv.Optional(CONF_INVALID_PACKETS): sensor.sensor_schema(),
+        cv.Optional(CONF_LAST_PACKET): text_sensor.text_sensor_schema(),
     }
 ).extend(cv.COMPONENT_SCHEMA).extend(uart.UART_DEVICE_SCHEMA)
 
