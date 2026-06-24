@@ -3,6 +3,9 @@ import esphome.config_validation as cv
 from esphome.components import uart, text_sensor, sensor
 from esphome.const import CONF_ID, CONF_UART_ID
 
+DEPENDENCIES = ["uart"]
+AUTO_LOAD = ["sensor", "text_sensor"]
+
 samsung_nasa_sniffer_ns = cg.esphome_ns.namespace("samsung_nasa_sniffer")
 SamsungNasaSniffer = samsung_nasa_sniffer_ns.class_(
     "SamsungNasaSniffer", cg.Component, uart.UARTDevice
