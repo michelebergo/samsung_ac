@@ -44,6 +44,10 @@ uart:
     stop_bits: 1
 
 sensor:
+  - platform: wifi_signal
+    name: "NASA Sniffer WiFi Signal"
+    update_interval: 60s
+
   - platform: samsung_nasa_sniffer
     uart_id: samsung_bus
     total_packets:
