@@ -48,20 +48,16 @@ sensor:
     name: "NASA Sniffer WiFi Signal"
     update_interval: 60s
 
-  - platform: samsung_nasa_sniffer
-    uart_id: samsung_bus
-    total_packets:
-      name: "NASA Total Packets"
-    valid_packets:
-      name: "NASA Valid Packets"
-    invalid_packets:
-      name: "NASA Invalid Packets"
-
-text_sensor:
-  - platform: samsung_nasa_sniffer
-    uart_id: samsung_bus
-    last_packet:
-      name: "NASA Last Packet"
+samsung_nasa_sniffer:
+  uart_id: samsung_bus
+  total_packets:
+    name: "NASA Total Packets"
+  valid_packets:
+    name: "NASA Valid Packets"
+  invalid_packets:
+    name: "NASA Invalid Packets"
+  last_packet:
+    name: "NASA Last Packet"
 
 # Note: the sniffer component is passive. It only listens and logs.
 # To avoid disturbing the bus, leave tx_pin unconnected or use a
